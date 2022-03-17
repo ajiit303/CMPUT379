@@ -93,7 +93,7 @@ void Master::serverListen() {
 
     // indicate how many connection requests can be queued
   
-    listen (sfd, nClient);
+    listen (sfd, MAX_NSW);
 
     setPfd(0, sfd); 
 }
