@@ -1,0 +1,7 @@
+main()
+    1. take in all the argument from the command prmopt
+    2. convert all the argument to the right type
+    3. create an instance of class Master
+        pass every arguments from the command prompt into Master()
+    4. call serverListen()
+    5. call startPoll()

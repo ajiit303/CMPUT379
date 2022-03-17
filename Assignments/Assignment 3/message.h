@@ -1,25 +1,27 @@
-// https://docs.fileformat.com/programming/h/ (Header Guards)
 #ifndef MESSAGE_H
 #define MESSAGE_H
 
-using namespace std;
+
+#include <cstdio>
+#include <cstring>
+
+#include <assert.h>
+#include <unistd.h>
 
 #include "const.h"
+#include "utils.h"
 
 
-/**
- * HELLO - switch number, number of its neighbouring switches, ranger of IP
- * HELLO_ACK - Reply of HELLO (no message)
- * 
- * ASK - not find a matching rule in table, sends an SK packet to the master switch
- * ADD - master switch replies with a rule stored in a packet of type ADD
- * 
- * RELAY - a switch forward a received packet header to a neighbour 
- */
+using namespace std;
 
-typedef enum {HELLO, HELLO_ACK, ASK, ADD, RELAY} PacketType;
 
-const char PacketTypeName[][16] = {"HELLO", "HELLO_ACK", "ASK", "ADD", "RELAY"};
+// The implementation of packet is identical in most of the aspect 
+// to the one in lab experiment.
+
+
+typedef enum { UNKNOWN, ADD, ASK, HELLO, HELLO_ACK, RELAY } PacketType;
+
+const char PacketTypeName[][16] = { "UNKNOWN", "ADD", "ASK", "HELLO", "HELLO_ACK", "RELAY",  };
 
 typedef struct { int srcIP_lo; int srcIP_hi;
     int destIP_lo; int destIP_hi;
@@ -36,13 +38,13 @@ typedef struct { } HELLO_ACKPacket;
 
 typedef struct { int srcIP; int destIP; } RELAYPacket;
 
-typedef struct { PacketType packetType; Packet packet; } Frame;
-
 typedef union { ADDPacket addPacket;
                 ASKPacket askPacket;
                 HELLOPacket helloPacket; 
                 HELLO_ACKPacket hello_ackPacket;
                 RELAYPacket replayPacket; } Packet;
+
+typedef struct { PacketType packetType; Packet packet; } Frame;
 
 Frame rcvFrame (int fd);
 
