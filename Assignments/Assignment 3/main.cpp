@@ -1,8 +1,6 @@
 #include "main.h"
 
 
-static int master = 0;
-
 struct sigaction oldAct, newAct;
 
 static Master *master;
@@ -18,10 +16,8 @@ int main ( int argc, char *args[] ) {
         if ( numSwitch > 0 && numSwitch <= MAX_NSW ) {
             master = new Master( numSwitch, portNumber );
             
-            master->createSocket();
-            master->bindSocket();
-            master->masterListen();
-            master->startPoll();
+            master->serverListen();
+            master->
 
             delete master;
         }

@@ -1,66 +1,133 @@
-#ifndef MESSAGE_H
-#define MESSAGE_H
-
-
-#include <cstdio>
-#include <cstring>
-
-#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
+#include <stdarg.h>
+#include <string.h>
+#include <assert.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+		     
+#define MAXLINE   132
+#define MAXWORD    32
 
-#include "const.h"
-#include "utils.h"
+#define NF 3		 // number of fields in each message
 
+#define MSG_KINDS 5
+typedef enum {UNKNOWN, ADD, ASK, DISCONNECT, HELLO, HELLO_ACK, RELAY} KIND;	  // Message kinds
+char KINDNAME[][MAXWORD]= {"UNKNOWN", "ADD", "ASK", "DISCONNECT", "HELLO", "HELLO_ACK", "RELAY"};
 
-using namespace std;
+typedef struct {int prev; int next; int switchNumber;
+    int IP_low; int IP_high} helloPacket;
 
+typedef struct
+{    // EMPTY
+} helloACKPacket;
 
-// The implementation of packet is identical in most of the aspect 
-// to the one in lab experiment.
+typedef union { helloPacket  hello; helloACKPacket acknowledge} MSG;
 
+typedef struct { KIND kind; MSG msg; } FRAME;
 
-typedef enum { UNKNOWN, ADD, ASK, HELLO, HELLO_ACK, RELAY } PacketType;
+// ------------------------------
+// The WARNING and FATAL functions are due to the authors of
+// the AWK Programming Language.
 
-const char PacketTypeName[][16] = { "UNKNOWN", "ADD", "ASK", "HELLO", "HELLO_ACK", "RELAY",  };
+void FATAL (const char *fmt, ... )
+{
+    va_list  ap;
+    fflush (stdout);
+    va_start (ap, fmt);  vfprintf (stderr, fmt, ap);  va_end(ap);
+    fflush (NULL);
+    exit(1);
+}
 
-typedef struct { int srcIP_lo; int srcIP_hi;
-    int destIP_lo; int destIP_hi;
-    int actionType; int actionVal;
-    int pkCount; } ADDPacket;
+MSG composeHello(int prev, int next, int switchNumber,
+    int IP_low, int IP_high) {
+        MSG msg;
 
-typedef struct { int srcIP; int destIP; } ASKPacket;
+        memset((char *)&msg, 0, sizeof(msg));
 
-typedef struct { int switchNum;
-    int prev; int next;
-    int srcIP_lo; int srcIP_hi; } HELLOPacket;
+        msg.hello.prev = prev;
+        msg.hello.next = next;
+        msg.hello.switchNumber = switchNumber;
+        msg.hello.IP_low = IP_low;
+        msg.hello.IP_high = IP_high;
 
-typedef struct { } HELLO_ACKPacket;
+        return msg;
+    }
 
-typedef struct { int srcIP; int destIP; } RELAYPacket;
+MSG composeHelloAcknowledge() {
+    MSG msg;
 
-typedef union { ADDPacket addPacket;
-                ASKPacket askPacket;
-                HELLOPacket helloPacket; 
-                HELLO_ACKPacket hello_ackPacket;
-                RELAYPacket replayPacket; } Packet;
+    memset((char *)&msg, 0, sizeof(msg));
 
-typedef struct { PacketType packetType; Packet packet; } Frame;
+    return msg;
+}
 
-Frame rcvFrame (int fd);
+void WARNING (const char *fmt, ... )
+{
+    va_list  ap;
+    fflush (stdout);
+    va_start (ap, fmt);  vfprintf (stderr, fmt, ap);  va_end(ap);
+}
 
-Packet composeADD ( int srcIP_lo, int srcIP_hi, int destIP_lo, int destIP_hi, 
-    int actionType, int actionVal, int pkCount );
+void sendFrame (int fd, KIND kind, MSG *msg)
+{
+    FRAME  frame;
 
-Packet composeASK ( int srcIP, int destIP );
+    assert (fd >= 0);
+    memset( (char *) &frame, 0, sizeof(frame) );
+    frame.kind= kind;
+    frame.msg=  *msg;
+    write (fd, (char *) &frame, sizeof(frame));
+}
 
-Packet composeHELLO ( int switchNum, int prev, int next, int srcIP_lo, int srcIP_high );
+FRAME rcvFrame (int fd)
+{
+    int    len; 
+    FRAME  frame;
 
-Packet composeHELLO_ACK ();
+    assert (fd >= 0);
+    memset( (char *) &frame, 0, sizeof(frame) );
+    len= read (fd, (char *) &frame, sizeof(frame));
+    if (len != sizeof(frame))
+        WARNING ("Received frame has length= %d (expected= %d)\n",
+		  len, sizeof(frame));
+    return frame;		  
+}
 
-Packet composeRELAY ( int srcIP, int destIP );
-
-void printFrame ( const char *prefix, Frame *frame );
-
-void sendFrame ( const char *prefix, int fd, PacketType packetType, Packet *packet );
-
-#endif
+      
+// ------------------------------
+void printFrame (const char *prefix, FRAME *frame)
+{
+    MSG  msg= frame->msg;
+    
+    printf ("%s [%s] ", prefix, KINDNAME[frame->kind]);
+    switch (frame->kind) {
+    case UNKNOWN:
+        printf ("UNKNOWN");
+        break;
+    case ADD:
+        printf ("ADD");
+        break;
+    case ASK:
+        printf ("ASK");
+        break;		   
+    case DISCONNECT:
+        printf("DISCONNECT"); 
+        break;
+    case HELLO:
+        printf("HELLO");
+        break;
+    case HELLO_ACK:
+        printf("HELLO_ACK");
+        break;
+    case RELAY:
+        printf("RELAY");
+        break;
+      default:
+          WARNING ("Unknown frame type (%d)\n", frame->kind);
+	  break;
+      }
+      printf("\n");
+}

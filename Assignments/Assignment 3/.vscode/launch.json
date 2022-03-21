@@ -6,12 +6,14 @@
       "type": "cppdbg",
       "request": "launch",
       "args": [
-        ""
+        "master",
+        "1",
+        "9060",
       ],
       "stopAtEntry": false,
-      "cwd": "c:/Users/ajiit/Desktop/University courses/Winter 2022/CMPUT 379/Assignments/Assignment 3",
+      "cwd": "/home/ajiit303/Assignment 3",
       "environment": [],
-      "program": "c:/Users/ajiit/Desktop/University courses/Winter 2022/CMPUT 379/Assignments/Assignment 3/build/Debug/outDebug",
+      "program": "/home/ajiit303/Assignment 3/build/Debug/outDebug",
       "internalConsoleOptions": "openOnSessionStart",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
