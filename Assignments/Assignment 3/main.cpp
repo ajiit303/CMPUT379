@@ -17,7 +17,7 @@ int main ( int argc, char *args[] ) {
             master = new Master( numSwitch, portNumber );
             
             master->serverListen();
-            master->
+        //  master->
 
             delete master;
         }

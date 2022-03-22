@@ -18,19 +18,44 @@ typedef enum {UNKNOWN, ADD, ASK, DISCONNECT, HELLO, HELLO_ACK, RELAY} KIND;	  //
 char KINDNAME[][MAXWORD]= {"UNKNOWN", "ADD", "ASK", "DISCONNECT", "HELLO", "HELLO_ACK", "RELAY"};
 
 typedef struct {int prev; int next; int switchNumber;
-    int IP_low; int IP_high} helloPacket;
+    int IP_low; int IP_high;} helloPacket;
+
+typedef struct {
+    int srcIP_lo; int srcIP_hi;
+    int destIP_lo; int destIP_hi;
+    int actionType; int actionVal;
+    int pkCount;
+} addPacket;
 
 typedef struct
 {    // EMPTY
 } helloACKPacket;
 
-typedef union { helloPacket  hello; helloACKPacket acknowledge} MSG;
+typedef struct {
+    int srcIP;
+    int destIP;
+} askPacket;
+
+typedef struct {
+    int switchNum;
+} disconnectPacket;
+
+typedef struct {
+    int srcIP;
+    int destIP;
+} relayPacket;
+
+typedef union {
+    helloPacket  hello;
+    helloACKPacket acknowledge;
+    askPacket askPckt;
+    disconnectPacket disconnectPckt;
+    relayPacket relayPckt;
+    addPacket addPckt;
+} MSG;
 
 typedef struct { KIND kind; MSG msg; } FRAME;
 
-// ------------------------------
-// The WARNING and FATAL functions are due to the authors of
-// the AWK Programming Language.
 
 void FATAL (const char *fmt, ... )
 {
@@ -39,6 +64,28 @@ void FATAL (const char *fmt, ... )
     va_start (ap, fmt);  vfprintf (stderr, fmt, ap);  va_end(ap);
     fflush (NULL);
     exit(1);
+}
+
+MSG composeAsk(int srcIP, int destIP) {
+    MSG msg;
+
+    memset((char *)&msg, 0, sizeof(msg));
+
+    msg.askPckt.srcIP = srcIP;
+    msg.askPckt.destIP = destIP;
+
+    return msg;
+}
+
+MSG composeRelay(int srcIP, int destIP) {
+    MSG msg;
+
+    memset((char *)&msg, 0, sizeof(msg));
+
+    msg.relayPckt.srcIP = srcIP;
+    msg.relayPckt.destIP = destIP;
+
+    return msg;
 }
 
 MSG composeHello(int prev, int next, int switchNumber,
@@ -64,6 +111,16 @@ MSG composeHelloAcknowledge() {
     return msg;
 }
 
+MSG composeDisconnect(int switchNum) {
+    MSG msg;
+
+    memset((char *)&msg, 0, sizeof(msg));
+
+    msg.disconnectPckt.switchNum = switchNum;
+
+    return msg;
+}
+
 void WARNING (const char *fmt, ... )
 {
     va_list  ap;
@@ -71,7 +128,7 @@ void WARNING (const char *fmt, ... )
     va_start (ap, fmt);  vfprintf (stderr, fmt, ap);  va_end(ap);
 }
 
-void sendFrame (int fd, KIND kind, MSG *msg)
+void sendFrame (const char *prefix, int fd, KIND kind, MSG *msg)
 {
     FRAME  frame;
 
@@ -80,17 +137,18 @@ void sendFrame (int fd, KIND kind, MSG *msg)
     frame.kind= kind;
     frame.msg=  *msg;
     write (fd, (char *) &frame, sizeof(frame));
+
+    printFrame(prefix, &frame);
 }
 
-FRAME rcvFrame (int fd)
+FRAME rcvFrame (int fd, int *len)
 {
-    int    len; 
     FRAME  frame;
 
     assert (fd >= 0);
     memset( (char *) &frame, 0, sizeof(frame) );
-    len= read (fd, (char *) &frame, sizeof(frame));
-    if (len != sizeof(frame))
+    * len= read (fd, (char *) &frame, sizeof(frame));
+    if (* len != sizeof(frame))
         WARNING ("Received frame has length= %d (expected= %d)\n",
 		  len, sizeof(frame));
     return frame;		  
