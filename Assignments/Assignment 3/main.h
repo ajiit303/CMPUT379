@@ -12,6 +12,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <unistd.h>
+#include <unordered_map>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -65,20 +66,42 @@ class Master {
         
         struct pollfd polledfds[MAXMSFD]; // pfds is polledfds
         
-        vector<pkInfo> pkInfos;
+        unordered_map<int, pkInfo> pkInfos;
         
         int forkSwitches();
         
         Master( int numSwitch, int portNumber );
 
         void setPfd ( int index, int fd );
+
         void resetPfd(int index);
+
         void serverListen();
+
         void masterAccept();
+
+        void masterDisconnect();
+
         void startPoll();
+
         void information();
-        void addPkInfo(helloPacket pckt);
+
+        void addPkInfo(helloPacket pckt, int pfdIndex);
+
         void sendHelloAck(int switchNum, int wfd);
+
+        void sendDisconnect(int switchNum, int wfd);
+
+        void sendAdd(int switchNum, int destIP, int wfd);
+
+        void connectionLost(int pfdIndex);
+
+        void removeSwitch(disconnectPacket disconnectPckt, int pfdIndex);
+        
+        void removeSwitchInfo(int pfdIndex);
+        
+        MSG ruleGeneration(int switchNum, int destIP);
+
 };
 
 class TOR {
@@ -251,14 +274,71 @@ void Master::masterAccept() {
     }
 }
 
+void Master::masterDisconnect() {
+    for (auto i = pkInfos.begin(); i != pkInfos.end(); i++) {
+        int index = i->first;
+        int switchNum = i->second.swNum;
+
+        sendDisconnect(switchNum, polledfds[index].fd);
+
+        close(polledfds[index].fd);
+    }
+
+    close(sfd);
+}
+
+void Master::sendDisconnect(int switchNum, int wfd) {
+    MSG disconnectPckt;
+
+    memset(&disconnectPckt, 0, sizeof(disconnectPckt));
+
+    disconnectPckt = composeDisconnect(0);
+
+    string prefix = "Transmitted (src = master, dest = " + to_string(switchNum) + ")";
+
+    sendFrame(prefix.c_str(), wfd, DISCONNECT, &disconnectPckt);
+}
+
+void Master::connectionLost(int pfdIndex) {
+    int switchNum = pkInfos[pfdIndex].swNum;
+
+    cout << "psw" << switchNum << " lost connection" << endl;
+
+    removeSwitchInfo(pfdIndex);
+
+    close(polledfds[pfdIndex].fd);
+
+    resetPfd(pfdIndex);
+
+    --acceptConnection;
+}
+
+void Master::removeSwitch(disconnectPacket disconnectPckt, int pfdIndex) {
+    int switchNum = disconnectPckt.switchNum;
+
+    removeSwitchInfo(pfdIndex);
+
+    close(polledfds[pfdIndex].fd);
+
+    resetPfd(pfdIndex);
+
+    cout << "psw" << switchNum << " disconnect from the master \n" << endl;
+
+    --acceptConnection;
+}
+
+void Master::removeSwitchInfo(int pfdIndex) {
+    pkInfos.erase(pfdIndex);
+}
+
 void Master::information() {
     cout << "\n Switch Information \n";
 
     for ( auto it = pkInfos.begin(); it != pkInfos.end(); it++ ) {
-        cout << "[psw" << to_string(it->swNum) << "]" << 
-        " port1 = " << to_string(it->prev) << 
-        ", port2 = " << to_string(it->next) << 
-        ", port3 = " << to_string(it->ipLow) << "-" << to_string(it->ipHigh) << endl;
+        cout << "[psw" << to_string(it->second.swNum) << "]" << 
+        " port1 = " << to_string(it->second.prev) << 
+        ", port2 = " << to_string(it->second.next) << 
+        ", port3 = " << to_string(it->second.ipLow) << "-" << to_string(it->second.ipHigh) << endl;
     }
 
     cout << "\n";
@@ -272,7 +352,7 @@ void Master::information() {
     ", ADD:" << to_string(addCount) << endl << endl;
 }
 
-void Master::addPkInfo(helloPacket pckt) {
+void Master::addPkInfo(helloPacket pckt, int pfdIndex) {
     pkInfo pkinfo;
 
     memset((char *)&pkinfo, 0, sizeof(pkinfo));
@@ -283,11 +363,9 @@ void Master::addPkInfo(helloPacket pckt) {
     pkinfo.prev = pckt.prev;
     pkinfo.swNum = pckt.switchNumber;
 
-    auto position = pkInfos.begin() + pkinfo.swNum - 1;
+    pkInfos[pfdIndex] = pkinfo;
 
-    pkInfos.insert(position, pkinfo);
-
-    cout << "Package Switch " << pkinfo.swNum << " is connected \n" << endl;
+    cout << "psw" << pkinfo.swNum << " is connected \n" << endl;
 }
 
 void Master::sendHelloAck(int switchNum, int wfd) {
@@ -304,6 +382,47 @@ void Master::sendHelloAck(int switchNum, int wfd) {
     hello_ackCount++;
 }
 
+void Master::sendAdd(int switchNum, int destIP, int wfd) {
+    MSG addPckt;
+
+    memset(&addPckt, 0, sizeof(addPckt));
+
+    addPckt = ruleGeneration(switchNum, destIP);
+
+    string prefix = "Transmitted (src = master, dest = " + to_string(switchNum) + ")";
+
+    sendFrame(prefix.c_str(), wfd, ADD, &addPckt);
+
+    addCount++;
+}
+
+MSG Master::ruleGeneration(int switchNum, int destIP) {
+    MSG rulePckt;
+    memset(&rulePckt, 0, sizeof(rulePckt));
+
+    for (auto i = pkInfos.begin(); i != pkInfos.end(); i++) {
+        if (destIP >= i->second.ipLow && destIP <= i->second.ipLow) {
+            int actionVal;
+
+            if (switchNum == i->second.swNum) {
+                actionVal = 3;
+            }
+            else if (switchNum < i->second.swNum) {
+                actionVal = 2;
+            }
+            else {
+                actionVal = 1;
+            }
+
+            rulePckt = composeAdd(0, MAXIP, i->second.ipLow, i->second.ipHigh, FORWARD, actionVal, 0);
+            return rulePckt;
+        }
+    }
+
+    rulePckt = composeAdd(0, MAXIP, destIP, destIP, DROP, 0, 0);
+    return rulePckt;
+}
+
 void Master::startPoll() {
     int i = 0; // index for looping polled file descriptors
     int length = 0; // measure number of bytes read from socket
@@ -313,58 +432,85 @@ void Master::startPoll() {
     string prefix;
 
     FRAME frame;
-    MSG msg;
+    KIND kind;
 
     cout << "start polling \n" << endl;
 
 
     while (1) {
-    rval= poll (polledfds, MAXMSFD, 0);
-    for (i= 0; i < MAXMSFD; i++) {
-        if ((polledfds[i].revents & POLLIN)) {
-            if (i == 0) {
-                length = read(polledfds[i].fd, buf, MAXBUF);
-            }
+        length = 0;
 
-            if (strcmp(buf, "info\n") == 0) {
-                information();
-            }
+        prefix = "";
+        memset(&buf, 0, sizeof(buf));
+        memset(&frame, 0, sizeof(frame));
 
-            else if (strcmp(buf, "exit\n") == 0) {
-                information();
-                return;
-            }
-            else {
-                cout << "Command not found!" << endl;
-            }
+        kind = UNKNOWN;
 
-            memset(&buf, 0, sizeof(buf));
+        rval= poll (polledfds, MAXMSFD, 0);
+
+        if (acceptConnection < MAX_NSW && (polledfds[1].revents & POLLIN)) {
+            masterAccept();
+            continue;
         }
 
-        else {
-            frame = rcvFrame(polledfds[i].fd, &length);
+        for (i= 0; i < MAXMSFD; i++) {
+            if ((polledfds[i].revents & POLLIN)) {
+                if (i == 0) {
+                    length = read(polledfds[i].fd, buf, MAXBUF);
+                }
 
-            msg = frame.msg;
+                if (strcmp(buf, "info\n") == 0) {
+                    information();
+                }
 
-            prefix = "\nReceived (src = psw" + to_string(i) + ", dest = master)";
+                else if (strcmp(buf, "exit\n") == 0) {
+                    information();
+                    masterDisconnect();
+                    return;
+                }
+                else {
+                    cout << "Command not found!" << endl;
+                }
 
-            printFrame(prefix.c_str(), &frame);
+                memset(&buf, 0, sizeof(buf));
+            }
 
-            switch (frame.kind)
-            {
-            case HELLO:
-                helloCount++;
-                addPkInfo(frame.msg.hello);
-                sendHelloAck(i, polledfds[i].fd);
-                break;
-            case ASK:
-                break;
-            default:
-                break;
+            else {
+                frame = rcvFrame(polledfds[i].fd, &length);
+
+                if (length <= 0) {
+                    connectionLost(i);
+                    continue;
+                }
+
+                kind = frame.kind;
+
+                prefix = "\nReceived (src = psw" + to_string(i) + ", dest = master)";
+
+                printFrame(prefix.c_str(), &frame);
+
+                switch (kind) {
+                    case HELLO:
+                        helloCount++;
+                        addPkInfo(frame.msg.hello, i);
+                        sendHelloAck(i, polledfds[i].fd);
+                        break;
+                    case ASK:
+                        askCount++;
+                        sendAdd(i, frame.msg.askPckt.destIP, polledfds[i].fd);
+                        break;
+                    case DISCONNECT:
+                        removeSwitch(frame.msg.disconnectPckt, i);
+                        break;
+                    case UNKNOWN:
+                        connectionLost(i);
+                        break;
+                    default:
+                        break;
+                }
             }
         }
     }
-}
 }
 
 TOR::TOR(int switchNum, int portNumber, int prev, int next,

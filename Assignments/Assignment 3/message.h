@@ -77,6 +77,23 @@ MSG composeAsk(int srcIP, int destIP) {
     return msg;
 }
 
+MSG composeAdd(int srcIP_lo, int srcIP_hi, int destIP_lo, int destIP_hi, 
+    int actionType, int actionVal, int pkCount) {
+        MSG msg;
+
+        memset((char *)&msg, 0, sizeof(msg));
+
+        msg.addPckt.srcIP_hi = srcIP_hi;
+        msg.addPckt.srcIP_lo = srcIP_lo;
+        msg.addPckt.actionType = actionType;
+        msg.addPckt.actionVal = actionVal;
+        msg.addPckt.destIP_lo = destIP_lo;
+        msg.addPckt.destIP_hi = destIP_hi;
+        msg.addPckt.pkCount = pkCount;
+
+        return msg;
+    }
+
 MSG composeRelay(int srcIP, int destIP) {
     MSG msg;
 
