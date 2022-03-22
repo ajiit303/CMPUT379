@@ -5,32 +5,49 @@ struct sigaction oldAct, newAct;
 
 static Master *master;
 // static PacketSwitch *packetSwitch;
+static TOR *tor;
+
+static int masterNumber = 0;
+
+void infoHandler (int sigNumber) {
+    if (masterNumber) {
+        master->information();
+    }
+    else {
+        tor->information();
+    }
+}
 
 
 int main ( int argc, char *args[] ) {
+    newAct.sa_handler = &infoHandler;
+    newAct.sa_flags |= SA_SIGINFO;
 
-    if ( argc == 4 ) {
+    sigaction(SIGUSR1, &newAct, &oldAct);
+
+    if (argc == 4) {
         int numSwitch = atoi(args[2]);
         int portNumber = atoi(args[3]);
 
         if ( numSwitch > 0 && numSwitch <= MAX_NSW ) {
+            masterNumber = 1;
             master = new Master( numSwitch, portNumber );
             
             master->serverListen();
-        //  master->
+            master->startPoll();
 
             delete master;
         }
-    } /* else if ( argc == 8 ) {
-
-        int switchNum = stoSwNum( string(args[1]) );
+    }
+    else if ( argc == 8 ) {
+        int switchNum = tor->stringToInt( string(args[1]) );
         string filename = string(args[2]);
-        int prev = stoSwNum( string(args[3]) );
-        int next = stoSwNum( string(args[4]) );
+        int prev = tor->stringToInt(string(args[3]));
+        int next = tor->stringToInt(string(args[4]));
 
         vector<string> ipRange;
 
-        split( string(args[5]), "-", ipRange );
+        tor->split( string(args[5]), "-", ipRange );
 
         int ipLow = stoi(ipRange.front());
         int ipHigh = stoi(ipRange.back());
@@ -38,42 +55,41 @@ int main ( int argc, char *args[] ) {
         string serverName = string(args[6]);
         int portNumber = atoi(args[7]);
 
-        packetSwitch = new PacketSwitch( switchNum, prev, next, ipLow, ipHigh, 
-            filename, serverName, portNumber );
+        tor = new TOR(switchNum, portNumber, prev, next, ipLow, ipHigh, 
+            filename, serverName);
 
-        packetSwitch->connectMaster();
-        packetSwitch->createFIFO();
+        tor->createSocket();
+        tor->createFIFO();
 
         int rval;
         pthread_t fileThreadId, pollThreadId;
 
-        rval = pthread_create( &fileThreadId, NULL, (THREADFUNCPTR)&PacketSwitch::readFile, packetSwitch );
+        rval = pthread_create( &fileThreadId, NULL, (THREADFUNCPTR)&TOR::fileReading, tor);
 
         if (rval) {
-            fatal( "pthread_create() error" );
+            cout << "pthread_create() error" << endl;
             exit(1);
         }
 
-        rval = pthread_create( &pollThreadId, NULL, (THREADFUNCPTR)&PacketSwitch::startPoll, packetSwitch );
+        rval = pthread_create( &pollThreadId, NULL, (THREADFUNCPTR)&TOR::startPoll, tor);
 
         if (rval) {
-            fatal( "pthread_create() error" );
+            cout << "pthread_create() error" << endl;
             exit(1);
         }
 
         rval = pthread_join( fileThreadId, NULL );
         if (rval) {
-            fatal( "pthread_join() error %d", rval );  
+            cout << "pthread_join() error " << rval << endl;  
         }
 
         rval = pthread_join( pollThreadId, NULL );
         if (rval) {
-            fatal( "pthread_join() error %d", rval );  
+            cout << "pthread_join() error " << rval << endl;  
         }
 
-        delete packetSwitch;
+        delete tor;
     }
-    */
-
+    
     return 0;
 }

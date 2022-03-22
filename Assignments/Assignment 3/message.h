@@ -57,14 +57,14 @@ typedef union {
 typedef struct { KIND kind; MSG msg; } FRAME;
 
 
-void FATAL (const char *fmt, ... )
-{
-    va_list  ap;
-    fflush (stdout);
-    va_start (ap, fmt);  vfprintf (stderr, fmt, ap);  va_end(ap);
-    fflush (NULL);
-    exit(1);
-}
+// void FATAL (const char *fmt, ... )
+// {
+//     va_list  ap;
+//     fflush (stdout);
+//     va_start (ap, fmt);  vfprintf (stderr, fmt, ap);  va_end(ap);
+//     fflush (NULL);
+//     exit(1);
+// }
 
 MSG composeAsk(int srcIP, int destIP) {
     MSG msg;
@@ -145,36 +145,8 @@ void WARNING (const char *fmt, ... )
     va_start (ap, fmt);  vfprintf (stderr, fmt, ap);  va_end(ap);
 }
 
-void sendFrame (const char *prefix, int fd, KIND kind, MSG *msg)
-{
-    FRAME  frame;
-
-    assert (fd >= 0);
-    memset( (char *) &frame, 0, sizeof(frame) );
-    frame.kind= kind;
-    frame.msg=  *msg;
-    write (fd, (char *) &frame, sizeof(frame));
-
-    printFrame(prefix, &frame);
-}
-
-FRAME rcvFrame (int fd, int *len)
-{
-    FRAME  frame;
-
-    assert (fd >= 0);
-    memset( (char *) &frame, 0, sizeof(frame) );
-    * len= read (fd, (char *) &frame, sizeof(frame));
-    if (* len != sizeof(frame))
-        WARNING ("Received frame has length= %d (expected= %d)\n",
-		  len, sizeof(frame));
-    return frame;		  
-}
-
-      
 // ------------------------------
-void printFrame (const char *prefix, FRAME *frame)
-{
+void printFrame (const char *prefix, FRAME *frame) {
     MSG  msg= frame->msg;
     
     printf ("%s [%s] ", prefix, KINDNAME[frame->kind]);
@@ -206,3 +178,30 @@ void printFrame (const char *prefix, FRAME *frame)
       }
       printf("\n");
 }
+
+void sendFrame (const char *prefix, int fd, KIND kind, MSG *msg)
+{
+    FRAME  frame;
+
+    assert (fd >= 0);
+    memset( (char *) &frame, 0, sizeof(frame) );
+    frame.kind= kind;
+    frame.msg=  *msg;
+    write (fd, (char *) &frame, sizeof(frame));
+
+    printFrame(prefix, &frame);
+}
+
+FRAME rcvFrame (int fd, int *len)
+{
+    FRAME  frame;
+
+    assert (fd >= 0);
+    memset( (char *) &frame, 0, sizeof(frame) );
+    * len= read (fd, (char *) &frame, sizeof(frame));
+    if (* len != sizeof(frame))
+        WARNING ("Received frame has length= %d (expected= %d)\n",
+		  len, sizeof(frame));
+    return frame;		  
+}
+

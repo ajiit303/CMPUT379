@@ -34,7 +34,6 @@
 
 const char actionNames[2][16] = {"DROP", "FORWARD"};
 
-
 using namespace std;
 
 typedef struct {
@@ -47,6 +46,25 @@ typedef struct {
     int srcIP;
     int destIP;
 } pendingPacket;
+
+typedef void * (*THREADFUNCPTR) (void *);
+
+class Rules {
+    public:
+        int srcIP_lo, srcIP_hi;
+        int destIP_lo, destIP_hi;
+        int actionType, actionVal;
+        int pkCount = 0;
+
+        Rules (int srcIP_lo, int srcIP_hi, int destIP_lo, int destIP_hi, 
+        int actionType, int actionVal );
+        
+        friend std::ostream& operator<< ( std::ostream& out, const Rules& r );
+
+        bool isMatch( int srcIP, int destIP );
+        bool isReach( int destIP );
+        bool isEqual( const Rules& r );
+};
 
 
 class Master {
@@ -184,22 +202,60 @@ class TOR {
 
 };
 
-class Rules {
-    public:
-        int srcIP_lo, srcIP_hi;
-        int destIP_lo, destIP_hi;
-        int actionType, actionVal;
-        int pkCount = 0;
+// class Rules {
+//     public:
+//         int srcIP_lo, srcIP_hi;
+//         int destIP_lo, destIP_hi;
+//         int actionType, actionVal;
+//         int pkCount = 0;
 
-        Rules (int srcIP_lo, int srcIP_hi, int destIP_lo, int destIP_hi, 
-        int actionType, int actionVal );
+//         Rules (int srcIP_lo, int srcIP_hi, int destIP_lo, int destIP_hi, 
+//         int actionType, int actionVal );
         
-        friend ostream& operator<< ( ostream& out, const Rules& r );
+//         friend ostream& operator<< ( ostream& out, const Rules& r );
 
-        bool isMatch( int srcIP, int destIP );
-        bool isReach( int destIP );
-        bool isEqual( const Rules& r );
-};
+//         bool isMatch( int srcIP, int destIP );
+//         bool isReach( int destIP );
+//         bool isEqual( const Rules& r );
+// };
+
+Rules::Rules(int srcIP_lo, int srcIP_hi, int destIP_lo, int destIP_hi, 
+        int actionType, int actionVal) {
+            this->srcIP_hi = srcIP_hi;
+            this->srcIP_lo = srcIP_lo;
+            this->destIP_hi = destIP_hi;
+            this->destIP_lo = destIP_lo;
+            this->actionType = actionType;
+            this->actionVal = actionVal;
+        }
+
+bool Rules::isMatch(int srcIP, int destIP) {
+    return ( srcIP >= srcIP_lo ) && ( srcIP <= srcIP_hi ) && ( destIP >= destIP_lo ) && ( destIP <= destIP_hi ) ;
+}
+
+bool Rules::isReach(int destIP) {
+    return actionVal == 3 && destIP <= destIP_hi && destIP >= destIP_lo;
+}
+
+bool Rules::isEqual(const Rules& r) {
+    return srcIP_lo == r.srcIP_lo && 
+           srcIP_hi == r.srcIP_hi && 
+           destIP_lo == r.destIP_lo && 
+           destIP_hi == r.destIP_hi && 
+           actionType == r.actionType && 
+           actionVal == r.actionVal;
+}
+
+std::ostream& operator<< ( std::ostream& out, const Rules& r ) {
+    string line = "(srcIP = " + to_string(r.srcIP_lo) + "-" + to_string(r.srcIP_hi) + 
+        ", destIP = " + to_string(r.destIP_lo) + "-" + to_string(r.destIP_hi) +
+        ", action = " + actionNames[r.actionType] + ":" + to_string(r.actionVal) + 
+        ", pkCount = " + to_string(r.pkCount) + ")";
+    
+    out << line << endl;
+
+    return out;
+}
 
 Master::Master(int numSwitch, int portNumber) {
     this->numSwitch = numSwitch;
@@ -698,7 +754,7 @@ void * TOR::startPoll() {
         length = 0;
         prefix = "";
 
-        if (!isMasterLive) {
+        if (!isMasterLive()) {
             information();
             exit(0);
         }
@@ -776,6 +832,7 @@ int TOR::packetForward(int sourceIP, int destinationIP, int relayIn) {
             return 1;
         }
     }
+    return 0;
 }
 
 string TOR::createPrefix(int source, int destination, int option) {
@@ -840,7 +897,7 @@ void TOR::sendAsk(int srcIP, int destIP) {
 
     string prefix = createPrefix(switchNum, 0, 1);
 
-    sendFrame(prefix.c_str(), fds[][], ASK, &askPckt);
+    sendFrame(prefix.c_str(), fds[1][1], ASK, &askPckt);
     History.push_back(pendingPckt);
 
     askCount++;
@@ -944,92 +1001,66 @@ void TOR::createFIFO() {
         }
         cout << name + " is open" << endl << endl;
 
-        string name = "fifo-" + to_string(switchNum) + "-" + to_string(prev);
+        string name1 = "fifo-" + to_string(switchNum) + "-" + to_string(prev);
 
         cout << "making " + name + "..." << endl;
-        if ( mkfifo( name.c_str(), S_IRWXU ) < 0 ) {
+        if ( mkfifo( name1.c_str(), S_IRWXU ) < 0 ) {
             if ( errno != EEXIST ) {
                 cout << "mkfifo error()" << endl;
                 exit(1);
             }
         }
-        cout << name + " is made" << endl << endl;
+        cout << name1 + " is made" << endl << endl;
 
-        cout << "opening " + name + " for write..." << endl;
-        if ( ( fds[2][1] = open( name.c_str(), O_RDWR ) ) < 0 ) {
+        cout << "opening " + name1 + " for write..." << endl;
+        if ( ( fds[2][1] = open( name1.c_str(), O_RDWR ) ) < 0 ) {
             cout << "open error()" << endl;
             exit(1);
         }
 
-        cout << name + " is open" << endl << endl;
+        cout << name1 + " is open" << endl << endl;
     }
 
     if (next != -1) {
-        string name = "fifo-" + to_string(next) + "-" + to_string(switchNum);
+        string name2 = "fifo-" + to_string(next) + "-" + to_string(switchNum);
 
-        cout << "making " + name + "..." << endl;
-        if ( mkfifo( name.c_str(), S_IRWXU ) < 0 ) {
+        cout << "making " + name2 + "..." << endl;
+        if ( mkfifo( name2.c_str(), S_IRWXU ) < 0 ) {
             if ( errno != EEXIST ) {
                 cout <<  "mkfifo error()" << endl;
                 exit(1);
             }
         }
-        cout << name + " is made" << endl << endl;
+        cout << name2 + " is made" << endl << endl;
 
-        cout << "opening " + name + " for read..." << endl;
-        if ( ( fds[3][0] = open( name.c_str(), O_RDWR ) ) < 0 ) {
+        cout << "opening " + name2 + " for read..." << endl;
+        if ( ( fds[3][0] = open( name2.c_str(), O_RDWR ) ) < 0 ) {
             cout << "open error()" << endl;
             exit(1);
         }
-        cout << name + " is open" << endl << endl;
+        cout << name2 + " is open" << endl << endl;
 
-        string name = "fifo-" + to_string(switchNum) + "-" + to_string(next);
+        string name3 = "fifo-" + to_string(switchNum) + "-" + to_string(next);
 
-        cout << "making " + name + "..." << endl;
-        if ( mkfifo( name.c_str(), S_IRWXU ) < 0 ) {
+        cout << "making " + name3 + "..." << endl;
+        if ( mkfifo( name3.c_str(), S_IRWXU ) < 0 ) {
             if ( errno != EEXIST ) {
                 cout << "mkfifo error()" << endl;
                 exit(1);
             }
         }
-        cout << name + " is made" << endl << endl;
+        cout << name3 + " is made" << endl << endl;
 
-        cout << "opening " + name + " for write..." << endl;
-        if ( ( fds[3][1] = open( name.c_str(), O_RDWR ) ) < 0 ) {
+        cout << "opening " + name3 + " for write..." << endl;
+        if ( ( fds[3][1] = open( name3.c_str(), O_RDWR ) ) < 0 ) {
             cout << "open error()" << endl;
             exit(1);
         }
 
-        cout << name + " is open" << endl << endl;
+        cout << name3 + " is open" << endl << endl;
     }
     
 }
 
-Rules::Rules(int srcIP_lo, int srcIP_hi, int destIP_lo, int destIP_hi, 
-        int actionType, int actionVal) {
-            this->srcIP_hi = srcIP_hi;
-            this->srcIP_lo = srcIP_lo;
-            this->destIP_hi = destIP_hi;
-            this->destIP_lo = destIP_lo;
-            this->actionType = actionType;
-            this->actionVal = actionVal;
-        }
-
-bool Rules::isMatch(int srcIP, int destIP) {
-    return ( srcIP >= srcIP_lo ) && ( srcIP <= srcIP_hi ) && ( destIP >= destIP_lo ) && ( destIP <= destIP_hi ) ;
-}
-
-bool Rules::isReach(int destIP) {
-    return actionVal == 3 && destIP <= destIP_hi && destIP >= destIP_lo;
-}
-
-bool Rules::isEqual(const Rules& r) {
-    return srcIP_lo == r.srcIP_lo && 
-           srcIP_hi == r.srcIP_hi && 
-           destIP_lo == r.destIP_lo && 
-           destIP_hi == r.destIP_hi && 
-           actionType == r.actionType && 
-           actionVal == r.actionVal;
-}
 
 #endif
