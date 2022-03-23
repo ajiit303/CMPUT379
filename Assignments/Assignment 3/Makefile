@@ -7,7 +7,7 @@
 # ------------------------------------------------------------
 #-------------------------------------------------------------
 target = submit
-allFiles = Makefile main.cpp *.h
+allFiles = Makefile Report.pdf main.cpp *.h
 #-------------------------------------------------------------
 
 starter:main.cpp main.h message.h
