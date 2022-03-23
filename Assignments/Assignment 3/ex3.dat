@@ -1,7 +1,7 @@
-# Data file for a2w22
-#   a2w22 master 2
-#   a2w22 psw1 ex2.dat null psw2 100-110
-#   a2w22 psw2 ex2.dat psw1 null 200-210
+# Data file for a3w22
+#   a3w22 master 2
+#   a3w22 psw1 ex2.dat null psw2 100-110
+#   a3w22 psw2 ex2.dat psw1 null 200-210
 
 psw1 100 102
 psw1 delay 5000
