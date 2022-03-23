@@ -7,14 +7,14 @@
 # ------------------------------------------------------------
 #-------------------------------------------------------------
 target = submit
-allFiles = Makefile main.cpp *.h
+allFiles = Makefile Report.pdf main.cpp *.h
 #-------------------------------------------------------------
 
 starter:main.cpp main.h message.h
 	g++ main.cpp -o a3w22 -pthread
 
 tar:
-	tar -cvf $(target).tar ($allFiles)
+	tar -cvf $(target).tar $(allFiles)
 	gzip $(target).tar
 
 clean:
