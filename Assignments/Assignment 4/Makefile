@@ -19,8 +19,8 @@ a4w22:$(object)
 	g++ main.cc -o a4w22 -lpthread
 
 tar:
-	touch ajiitesh-a4.tar.gz
-	tar -czvf ajiitesh-a4.tar.gz $(allFiles)
+	touch gupta-a4.tar.gz
+	tar -czvf gupta-a4.tar.gz $(allFiles)
 
 test1:
 	./a4w22 $(dataFile) $(monitorTime) $(NITER)
