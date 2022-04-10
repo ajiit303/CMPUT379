@@ -26,4 +26,4 @@ test1:
 	./a4w22 $(dataFile) $(monitorTime) $(NITER)
 
 clean:
-	rm -rf $(object) a4w22
+	rm -rf $(object) a4w22 main.o
