@@ -1,4 +1,4 @@
-// Created by Ajiitesh Gupta on 2022/04/10
+// Created by Ajiitesh Gupta on 2022/04/08
  
 #include <iostream>
 #include <fstream>
@@ -12,7 +12,7 @@
 #include <chrono>
 #include <map>
 #define NRES_TYPES 10 // max resources typ
-#define NTASKS 25 // max jobs
+#define NJOBS 25 // max jobs
 #define DEBUG false
 
 using namespace std;
